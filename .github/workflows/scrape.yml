@@ -1,15 +1,15 @@
-name: Web Monitor Scraper
+name: KMU Notice Scraper
 
 on:
-  workflow_dispatch: # cron-job.org 또는 GitHub UI에서 수동/API 호출 가능
+  workflow_dispatch: # cron-job.org 또는 GitHub API/버튼 클릭으로 실행 가능
   schedule:
-    - cron: '*/30 * * * *' # 30분마다 자동 실행 (필요 시 주기 변경 가능)
+    - cron: '*/30 * * * *' # GitHub Actions 30분 주기 스케줄링
 
 jobs:
   scrape:
     runs-on: ubuntu-latest
     permissions:
-      contents: write # git-auto-commit-action 실행에 필요한 레포지토리 쓰기 권한
+      contents: write # kmu_data.txt 푸시를 위한 쓰기 권한
 
     steps:
       - name: Checkout Repository
@@ -25,17 +25,15 @@ jobs:
           python -m pip install --upgrade pip
           pip install requests beautifulsoup4
 
-      - name: Run Scrapers
+      - name: Run KMU Scraper
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
-          python monitor.py || true
-          python dorm_monitor.py || true
-          python kmu_monitor.py || true
+          python kmu_monitor.py
 
       - name: Commit and Push Updated Data
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
-          commit_message: "auto: update monitoring state data [skip ci]"
-          file_pattern: "*.txt"
+          commit_message: "auto: update kmu_data.txt [skip ci]"
+          file_pattern: "kmu_data.txt"
