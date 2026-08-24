@@ -11,18 +11,10 @@ BASE_URL = "https://www.kookmin.ac.kr"
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
 
-# 실제 PC 브라우저와 동일한 완벽한 헤더 구성 (차단 방지)
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
-    "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
-    "Referer": "https://www.kookmin.ac.kr/",
-    "Sec-Ch-Ua": '"Chromium";v="122", "Not(A:Brand";v="24", "Google Chrome";v="122"',
-    "Sec-Ch-Ua-Mobile": "?0",
-    "Sec-Ch-Ua-Platform": '"Windows"',
-    "Sec-Fetch-Dest": "document",
-    "Sec-Fetch-Mode": "navigate",
-    "Sec-Fetch-Site": "same-origin"
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Referer": "https://www.kookmin.ac.kr/"
 }
 
 def load_processed_ids():
@@ -71,9 +63,8 @@ def crawl_kmu_notice():
     processed_ids = load_processed_ids()
     is_first_run = len(processed_ids) == 0
 
-    session = requests.Session()
     try:
-        response = session.get(URL, headers=HEADERS, timeout=15)
+        response = requests.get(URL, headers=HEADERS, timeout=15)
         response.raise_for_status()
     except Exception as e:
         print(f"[ERROR] 국민대 서버 요청 실패: {e}")
@@ -81,70 +72,63 @@ def crawl_kmu_notice():
 
     soup = BeautifulSoup(response.text, "html.parser")
 
-    # 1. 다중 선택자 지원 (ul.board-list 내 li 우선 탐색 후 fallback)
-    posts = soup.select("ul.board-list > li")
-    if not posts:
-        posts = soup.select(".board-list li")
-    if not posts:
-        # li 단계 없이 a.board-item을 직접 감싸는 요소 탐색
-        items = soup.select("a.board-item")
-        posts = [item.parent for item in items]
+    # 핵심 개편: 상세페이지 URL 패턴(detail.do)을 가진 <a> 태그를 직접 추적
+    a_tags = soup.find_all("a", href=lambda h: h and "detail.do" in h)
+    
+    seen_links = set()
+    parsed_posts = []
 
-    print(f"[INFO] 파싱된 게시글 개수: {len(posts)}개")
-
-    # 게시글을 전혀 찾지 못한 경우 디버깅 정보 출력
-    if len(posts) == 0:
-        print(f"[DEBUG] 응답 상태 코드: {response.status_code}")
-        print(f"[DEBUG] 최종 URL: {response.url}")
-        print(f"[DEBUG] 수신된 HTML 일부 (최대 1000자):\n{response.text[:1000]}")
-        return
-
-    new_posts = []
-
-    for post in posts:
-        a_tag = post.select_one("a.board-item") if post.name != "a" else post
-        if not a_tag:
-            a_tag = post.select_one("a")
-        if not a_tag:
-            continue
-
-        link = a_tag.get("href", "").strip()
-        if not link or link.startswith("javascript"):
+    for a in a_tags:
+        link = a.get("href", "").strip()
+        if not link:
             continue
 
         if not link.startswith("http"):
             link = BASE_URL + link
 
-        category_el = post.select_one(".category")
-        category = category_el.get_text(strip=True) if category_el else ""
+        # 중복 링크 제외
+        if link in seen_links:
+            continue
+        seen_links.add(link)
 
-        title_el = post.select_one("strong.title, .title")
-        title = title_el.get_text(strip=True) if title_el else ""
-        if not title:
-            # a 태그 내부의 전체 텍스트 fallback
-            title = a_tag.get_text(strip=True)
-        if not title:
+        # parent (li 또는 tr) 추출
+        parent = a.find_parent("li") or a.find_parent("tr") or a.parent
+
+        # 1. 제목 추출 (<strong class="title"> 또는 태그 내부 텍스트)
+        title_el = a.select_one("strong.title, .title, strong")
+        if title_el:
+            title = title_el.get_text(strip=True)
+        else:
+            title = a.get_text(strip=True)
+
+        if not title or len(title) < 2:
             continue
 
-        date_el = post.select_one(".info .date, .date")
+        # 2. 카테고리 추출
+        cat_el = a.select_one(".category") or parent.select_one(".category")
+        category = cat_el.get_text(strip=True) if cat_el else ""
+
+        # 3. 날짜 추출
+        date_el = a.select_one(".date") or parent.select_one(".date")
         date = date_el.get_text(strip=True) if date_el else "날짜 미상"
 
-        dept_el = post.select_one(".info .department, .department")
+        # 4. 부서 추출
+        dept_el = a.select_one(".department") or parent.select_one(".department")
         department = dept_el.get_text(strip=True) if dept_el else ""
 
-        post_id = link
+        parsed_posts.append({
+            "id": link,
+            "title": title,
+            "link": link,
+            "date": date,
+            "category": category,
+            "department": department
+        })
 
-        if post_id not in processed_ids:
-            new_posts.append({
-                "id": post_id,
-                "title": title,
-                "link": link,
-                "date": date,
-                "category": category,
-                "department": department
-            })
+    print(f"[INFO] 파싱된 게시글 개수: {len(parsed_posts)}개")
 
-    new_posts.reverse()
+    new_posts = [p for p in parsed_posts if p["id"] not in processed_ids]
+    new_posts.reverse()  # 과거 순서부터 처리
 
     for p in new_posts:
         print(f"[신규 공지 발견] [{p['category']}] {p['title']} ({p['date']})")
@@ -158,8 +142,8 @@ def crawl_kmu_notice():
             )
         processed_ids.add(p["id"])
 
-    if is_first_run and len(new_posts) > 0:
-        print(f"[최초 실행 완료] 총 {len(new_posts)}개 게시글 URL을 {DATA_FILE}에 최초 기록했습니다. (스팸 방지로 알림은 미발송)")
+    if is_first_run and len(parsed_posts) > 0:
+        print(f"[최초 실행 완료] 총 {len(parsed_posts)}개 게시글 URL을 {DATA_FILE}에 최초 기록했습니다. (스팸 방지로 알림은 미발송)")
 
     if len(processed_ids) > 0:
         save_processed_ids(processed_ids)
