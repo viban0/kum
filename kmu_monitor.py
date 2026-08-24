@@ -31,22 +31,24 @@ def save_processed_ids(processed_ids):
             f.write(f"{pid}\n")
 
 # ==================== [텔레그램 알림 전송] ====================
-def send_telegram_message(title, link, date=""):
+def send_telegram_message(title, link, date="", category="", department=""):
     """텔레그램 메시지 발송"""
     if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
-        print(f"[CONSOLE ONLY] 토큰 미설정 - 제목: {title} | 날짜: {date} | 링크: {link}")
+        print(f"[CONSOLE ONLY] 토큰 미설정 - [{category}] {title} | {date} | {link}")
         return
 
     # HTML 태그 깨짐 방지용 이스케이프
     safe_title = html.escape(title)
     safe_date = html.escape(date)
+    safe_category = html.escape(category) if category else "장학"
+    safe_dept = html.escape(department) if department else ""
 
-    message = (
-        f"<b>[국민대학교 장학공지]</b>\n\n"
-        f"<b>제목:</b> {safe_title}\n"
-        f"<b>날짜:</b> {safe_date}\n"
-        f"<b>링크:</b> <a href=\"{link}\">게시글 바로가기</a>"
-    )
+    message = f"<b>[{safe_category} 공지]</b>\n\n"
+    message += f"<b>제목:</b> {safe_title}\n"
+    message += f"<b>날짜:</b> {safe_date}\n"
+    if safe_dept:
+        message += f"<b>작성부서:</b> {safe_dept}\n"
+    message += f"<b>링크:</b> <a href=\"{link}\">게시글 바로가기</a>"
 
     telegram_url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
     payload = {
@@ -71,36 +73,46 @@ def crawl_kmu_notice():
         response = requests.get(URL, headers=HEADERS, timeout=15)
         response.raise_for_status()
     except Exception as e:
-        print(f"[ERROR] KMU 서버 요청 실패: {e}")
+        print(f"[ERROR] 국민대 서버 요청 실패: {e}")
         return
 
     soup = BeautifulSoup(response.text, "html.parser")
 
-    # 게시글 선택자 대응
-    posts = soup.select("ul.board-list > li, table.board-list tbody tr, table.board_list tbody tr")
-    if not posts:
-        posts = soup.select("ul.board_list > li, .board-list li, .board_list tr")
+    # ul.board-list 내의 개별 li 선택
+    posts = soup.select("ul.board-list > li")
+    print(f"[INFO] 파싱된 게시글 개수: {len(posts)}개")
 
     new_posts = []
 
     for post in posts:
-        title_element = post.select_one(".title a, a.title, td.title a, .subject a") or post.select_one("a")
-        if not title_element:
+        # <a> 태그 파싱
+        a_tag = post.select_one("a.board-item") or post.select_one("a")
+        if not a_tag:
             continue
 
-        title = title_element.get_text(strip=True)
-        if not title:
-            continue
-
-        link = title_element.get("href", "")
+        link = a_tag.get("href", "").strip()
         if not link or link.startswith("javascript"):
             continue
 
         if not link.startswith("http"):
             link = BASE_URL + link
 
-        date_element = post.select_one(".date, td.date, .reg_date, .time")
-        date = date_element.get_text(strip=True) if date_element else "날짜 미상"
+        # 카테고리 추출 (<span class="category">)
+        category_el = post.select_one(".category")
+        category = category_el.get_text(strip=True) if category_el else ""
+
+        # 제목 추출 (<strong class="title">)
+        title_el = post.select_one("strong.title") or post.select_one(".title")
+        title = title_el.get_text(strip=True) if title_el else ""
+        if not title:
+            continue
+
+        # 날짜 및 작성부서 추출
+        date_el = post.select_one(".info .date") or post.select_one(".date")
+        date = date_el.get_text(strip=True) if date_el else "날짜 미상"
+
+        dept_el = post.select_one(".info .department") or post.select_one(".department")
+        department = dept_el.get_text(strip=True) if dept_el else ""
 
         post_id = link
 
@@ -109,20 +121,28 @@ def crawl_kmu_notice():
                 "id": post_id,
                 "title": title,
                 "link": link,
-                "date": date
+                "date": date,
+                "category": category,
+                "department": department
             })
 
-    # 과거 순서부터 메시지 발송
+    # 과거 순서부터 메시지 발송 (역순 정렬)
     new_posts.reverse()
 
     for p in new_posts:
-        print(f"[신규 공지] {p['title']} ({p['date']})")
+        print(f"[신규 공지 발견] [{p['category']}] {p['title']} ({p['date']})")
         if not is_first_run:
-            send_telegram_message(p["title"], p["link"], p["date"])
+            send_telegram_message(
+                title=p["title"],
+                link=p["link"],
+                date=p["date"],
+                category=p["category"],
+                department=p["department"]
+            )
         processed_ids.add(p["id"])
 
     if is_first_run:
-        print(f"[최초 실행 완료] 기존 공지 {len(new_posts)}개 상태 저장 (알림 미발송)")
+        print(f"[최초 실행 완료] 총 {len(new_posts)}개 게시글 URL을 {DATA_FILE}에 최초 기록했습니다. (스팸 방지로 알림은 미발송)")
 
     save_processed_ids(processed_ids)
     print("모니터링 작업 완료.")
