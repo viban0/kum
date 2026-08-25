@@ -2,8 +2,7 @@ name: KMU Notice Scraper
 
 on:
   workflow_dispatch: # cron-job.org 또는 GitHub API/버튼 클릭으로 실행 가능
-  schedule:
-    - cron: '*/30 * * * *' # GitHub Actions 30분 주기 스케줄링
+  
 
 jobs:
   scrape:
