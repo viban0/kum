@@ -127,7 +127,7 @@ def fetch_kmu_notices():
                 "id": full_url,
                 "title": title,
                 "link": full_url,
-                "board_name": "국민대 일반공지",
+                "board_name": "A장학공지",
             }
         )
 
@@ -181,7 +181,7 @@ def fetch_scholarship_notices():
                 "id": full_url,
                 "title": title,
                 "link": full_url,
-                "board_name": "장학공지",
+                "board_name": "B장학공지",
             }
         )
 
