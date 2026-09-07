@@ -15,6 +15,10 @@ https://www.hongik.ac.kr/kr/newscenter/notice.do?mode=view&articleNo=156058&noCa
 https://www.hongik.ac.kr/kr/newscenter/notice.do?mode=view&articleNo=156116&noCat=501
 https://www.hongik.ac.kr/kr/newscenter/notice.do?mode=view&articleNo=156161&noCat=501
 https://www.hongik.ac.kr/kr/newscenter/notice.do?mode=view&articleNo=156207&noCat=501
+https://www.hongik.ac.kr/kr/newscenter/notice.do?mode=view&articleNo=156482&noCat=501
+https://www.hongik.ac.kr/kr/newscenter/notice.do?mode=view&articleNo=156491&noCat=501
+https://www.hongik.ac.kr/kr/newscenter/notice.do?mode=view&articleNo=156505&noCat=501
+https://www.hongik.ac.kr/kr/newscenter/notice.do?mode=view&articleNo=156529&noCat=501
 https://www.hongik.ac.kr?mode=view&articleNo=155441&article.offset=0&articleLimit=10&srCategoryId=24&srSearchKey=article_title&noCat=24
 https://www.hongik.ac.kr?mode=view&articleNo=155762&article.offset=0&articleLimit=10&srCategoryId=24&srSearchKey=article_title&noCat=24
 https://www.kookmin.ac.kr/user/kmuNews/notice/7/12160/view.do
